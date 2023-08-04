@@ -138,6 +138,12 @@ df <- do.call("rbind", df)
 saveRDS(df,
         here("data", "df.rda"))
 
+# df <- readRDS(here("data", "df.rda"))
+
+
+
+## Check -----------------------------------------------------------------------
+
 ## For comparison: group_by(year, race_eth)
 ## Not exactly the same number but similar. Due to race?
 df.check <- readRDS("../parental_loss_by_race/data/lt_US.rda")
@@ -162,10 +168,33 @@ df |>
             n_opioid = sum(n_opioid))
 
 
+
+## Monthly scaling & 100-Index -------------------------------------------------
+
+df.100Index <- df |> 
+  mutate(
+    ## Month have differing number of days
+    ## -> rescale accordingly
+    across(c(n_deaths, n_drugs, n_opioid),
+           ~ case_when(monthdth %in% c(1,3,5,7,8,10,12) ~ ., # ref nber of days
+                       monthdth %in% c(4,6,9,11) ~ . *(31/30),
+                       (monthdth == 2) & (year %in% seq(2000, 2020, 4)) ~  . *(31/29),
+                       (monthdth == 2) & !(year %in% seq(2000, 2020, 4)) ~  . *(31/28)
+           ))
+  ) |> 
+  ## Compute 100-index
+  group_by(year, race_eth) |> 
+  mutate(
+    across(c(n_deaths, n_drugs, n_opioid),
+           ~ (./sum(.))*1200)
+  )
+
+
+
 ## Visu ------------------------------------------------------------------------
 
 ## All death
-df |> 
+df.100Index |> 
   ## year 2020 is affected by Covid19
   ## and has much higher counts
   filter(year != 2020) |> 
@@ -173,18 +202,41 @@ df |>
   facet_wrap(~ race_eth,
              scales = "free_y") +
   geom_line() +
+  geom_hline(yintercept = 100,
+             linetype = "dashed") +
   theme_bw() +
   theme(legend.position = c(0.85, 0.2)) +
-  scale_x_continuous(breaks = 1:12)
+  scale_x_continuous(breaks = 1:12) +
+  labs(title = "All-cause deaths",
+       y = "100-Index")
 
 ## Drug deaths
-df |> 
+df.100Index |> 
   filter(year != 2020) |> 
   ggplot(aes(x = monthdth, y = n_drugs, col = year, group = year)) +
   facet_wrap(~ race_eth,
              scales = "free_y") +
   geom_line() +
+  geom_hline(yintercept = 100,
+             linetype = "dashed") +
   theme_bw() +
   theme(legend.position = c(0.85, 0.2)) +
-  scale_x_continuous(breaks = 1:12)
+  scale_x_continuous(breaks = 1:12) +
+  labs(title = "Drugs deaths",
+       y = "100-Index")
+
+## Opioid deaths
+df.100Index |> 
+  filter(year != 2020) |> 
+  ggplot(aes(x = monthdth, y = n_opioid, col = year, group = year)) +
+  facet_wrap(~ race_eth,
+             scales = "free_y") +
+  geom_line() +
+  geom_hline(yintercept = 100,
+             linetype = "dashed") +
+  theme_bw() +
+  theme(legend.position = c(0.85, 0.2)) +
+  scale_x_continuous(breaks = 1:12) +
+  labs(title = "Opioid deaths",
+       y = "100-Index")
 
